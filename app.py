@@ -175,7 +175,7 @@ for number, (name, img) in enumerate(photos.items(), start=1):   # Loop ทุ�
 table = pd.DataFrame(
     [{k: v for k, v in r.items() if k != "palette"} for r in results]
 ).round(1)
-display(table)
+st.write(table)
 
 # %% [code]
 # 5) ฟังก์ชันวาดแดชบอร์ด
