@@ -20,10 +20,10 @@ import streamlit as st
 # ตั้งค่าหน้าเว็บ
 st.set_page_config(page_title="Photo Tone Dashboard", layout="wide")
 
-# --- ปรับแต่ง UI: ฟอนต์ Google Font 'Sarabun' และโทนสีครีมมินิมอล ---
+# --- ปรับแต่ง UI: ฟอนต์ Google Font 'Sarabun' และสไตล์มินิมอลสบายตา ---
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
     
     * {
         font-family: 'Sarabun', sans-serif !important;
@@ -40,33 +40,29 @@ st.markdown("""
         background-color: #F7F3EC;
         border: 1px dashed #D4C5B9;
         border-radius: 12px;
-        padding: 15px;
+        padding: 12px;
     }
     
     /* หัวข้อและข้อความ */
     h1, h2, h3, h4 {
         color: #3D342F !important;
-        font-weight: 700 !important;
+        font-weight: 600 !important;
     }
     
     /* กล่องข้อความสรุปด้านล่าง */
     .summary-box {
         background-color: #F5EFEB;
         border-left: 4px solid #C8B2A0;
-        padding: 18px 22px;
-        border-radius: 10px;
-        margin-top: 25px;
-        font-size: 16px;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin-top: 15px;
+        font-size: 15px;
     }
-    
-    /* ตกแต่งการ์ดแสดงรูปภาพ */
-    .img-card {
-        background-color: #FFFFFF;
-        border: 1px solid #EFEAE4;
-        border-radius: 10px;
-        padding: 8px;
-        text-align: center;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+
+    /* ครอบรูปให้อยู่ในกรอบมนขนาดกำลังพอดี */
+    div[data-testid="stImage"] img {
+        border-radius: 8px;
+        object-fit: cover;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -103,167 +99,4 @@ def analyze_photo(name, img, number):
     if brightness > 70 and saturation < 30:
         mood = "Pastel / Airy"
     elif brightness < 35:
-        mood = "Dark & Moody"
-    elif saturation > 55:
-        mood = "Vivid"
-    else:
-        mood = "Muted"
-        
-    pixels = arr.reshape(-1, 3)
-    idx = np.random.choice(len(pixels), min(1000, len(pixels)), replace=False)
-    sample = pixels[idx]
-    counts, _ = np.histogramdd(sample, bins=(4, 4, 4), range=((0, 256), (0, 256), (0, 256)))
-    flat_idx = np.argsort(counts.ravel())[::-1][:NUM_COLORS]
-    
-    palette = []
-    for fi in flat_idx:
-        indices = np.unravel_index(fi, (4, 4, 4))
-        center = [(indices[i] + 0.5) * 64 for i in range(3)]
-        palette.append(tuple(int(c) for c in center))
-        
-    return {
-        "photo": f"Photo {number}",
-        "file": name,
-        "brightness": round(brightness, 1),
-        "saturation": round(saturation, 1),
-        "warmth": round(warmth, 1),
-        "temperature": temperature,
-        "mood": mood,
-        "palette": palette
-    }
-
-def text_color_for(rgb):
-    light = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
-    return "black" if light > 140 else "white"
-
-def draw_palette_bar(ax, palette, show_hex=False):
-    left = 0
-    for rgb, share in palette:
-        ax.barh(0, share, left=left, color=[c / 255 for c in rgb])
-        if show_hex:
-            hex_code = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
-            ax.text(left + share / 2, 0, hex_code, ha="center", va="center",
-                    fontsize=8, color=text_color_for(rgb))
-        left += share
-    ax.set_xlim(0, 1)
-    ax.set_yticks([])
-    ax.set_xticks([])
-
-def signature_palette(results, k=SIGNATURE_COLORS):
-    all_colors = []
-    for r in results:
-        all_colors.extend(r["palette"])
-    if not all_colors:
-        return []
-    sample = np.array(all_colors)
-    counts, _ = np.histogramdd(sample, bins=(8, 8, 8), range=((0, 256), (0, 256), (0, 256)))
-    flat_idx = np.argsort(counts.ravel())[::-1][:k]
-    sig = []
-    total = sum(counts.ravel()[fi] for fi in flat_idx) or 1
-    for fi in flat_idx:
-        indices = np.unravel_index(fi, (8, 8, 8))
-        center = [(indices[i] + 0.5) * 32 for i in range(3)]
-        share = counts[indices] / total
-        sig.append((tuple(int(c) for c in center), share))
-    return sig
-
-def count_labels(results, key):
-    out = {}
-    for r in results:
-        val = r[key]
-        out[val] = out.get(val, 0) + 1
-    return out
-
-# --- ส่วนการแสดงผลบน STREAMLIT ---
-st.title("📸 Photo Tone Trends & AI Analytics Dashboard")
-st.caption("วิเคราะห์แนวโน้มโทนสี อารมณ์ และอุณหภูมิภาพถ่ายในสไตล์มินิมอล")
-
-# ส่วนอัปโหลดรูปภาพ
-uploaded_files = st.file_uploader("เลือกรูปภาพเพื่อนำมาวิเคราะห์ (สามารถเลือกพร้อมกันหลายรูปได้)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-
-if uploaded_files:
-    results = []
-    photos = {}
-    for idx, file in enumerate(uploaded_files, start=1):
-        bytes_data = file.read()
-        img = load_photo_from_bytes(bytes_data)
-        photos[f"Photo {idx}"] = img
-        res = analyze_photo(file.name, img, idx)
-        results.append(res)
-        
-    # 🖼️ ส่วนแสดงรูปภาพที่ส่งไป (Uploaded Photos Gallery)
-    st.write("### 🖼️ รูปภาพที่นำเข้าวิเคราะห์")
-    cols = st.columns(min(len(photos), 6))  # แสดงสูงสุด 6 คอลัมน์ต่อแถว
-    for idx, (p_name, p_img) in enumerate(photos.items()):
-        with cols[idx % 6]:
-            st.image(p_img, use_column_width=True, caption=p_name)
-    st.divider()
-
-    # 1. แสดงตารางสรุป
-    st.write("### 📋 ตารางข้อมูลสถิติภาพถ่าย")
-    table = pd.DataFrame([{k: v for k, v in r.items() if k != "palette"} for r in results])
-    st.dataframe(table, use_container_width=True)
-    
-    # 2. กราฟแดชบอร์ด 4 ช่อง
-    plt.rcParams['figure.facecolor'] = '#FDFBF7'
-    plt.rcParams['axes.facecolor'] = '#FDFBF7'
-    fig = plt.figure(figsize=(12, 10))
-    
-    # (1) Mood
-    ax1 = fig.add_subplot(2, 2, 1)
-    moods = count_labels(results, "mood")
-    ax1.bar(list(moods.keys()), list(moods.values()), color="#8A9A86")
-    ax1.set_title("Mood of photos", color="#3D342F", fontsize=11, fontweight='bold')
-    ax1.set_ylabel("Number of photos", color="#3D342F")
-    ax1.yaxis.set_major_locator(MaxNLocator(integer=True))
-    plt.setp(ax1.get_xticklabels(), rotation=20, ha="right", color="#3D342F")
-    
-    # (2) Temperature
-    ax2 = fig.add_subplot(2, 2, 2)
-    temps = count_labels(results, "temperature")
-    colors = [TEMP_COLORS.get(t, "#B8B0A6") for t in temps.keys()]
-    ax2.bar(list(temps.keys()), list(temps.values()), color=colors)
-    ax2.set_title("Color temperature", color="#3D342F", fontsize=11, fontweight='bold')
-    ax2.set_ylabel("Number of photos", color="#3D342F")
-    ax2.yaxis.set_major_locator(MaxNLocator(integer=True))
-    
-    # (3) Scatter Brightness vs Saturation
-    ax3 = fig.add_subplot(2, 2, 3)
-    for r in results:
-        num = int(r["photo"].replace("Photo ", ""))
-        ax3.scatter(r["brightness"], r["saturation"], s=130, color="#C8963E", zorder=3)
-        ax3.annotate(str(num), (r["brightness"], r["saturation"]),
-                     ha="center", va="center", fontsize=8, color="white", fontweight="bold")
-    ax3.set_xlim(0, 100)
-    ax3.set_ylim(0, 100)
-    ax3.set_xlabel("Brightness", color="#3D342F")
-    ax3.set_ylabel("Saturation", color="#3D342F")
-    ax3.set_title("Brightness vs saturation (number = photo)", color="#3D342F", fontsize=11, fontweight='bold')
-    ax3.grid(True, linestyle="--", alpha=0.4, color="#D4C5B9")
-    
-    # (4) Signature Palette
-    ax_sig = fig.add_subplot(2, 2, 4)
-    draw_palette_bar(ax_sig, signature_palette(results), show_hex=True)
-    ax_sig.set_title("Signature palette (all photos combined)", color="#3D342F", fontsize=11, fontweight='bold')
-    
-    fig.tight_layout()
-    st.pyplot(fig)
-    
-    # 3. สรุปผลข้อความภาษาไทยด้านล่าง
-    temp_counts = count_labels(results, "temperature")
-    mood_counts = count_labels(results, "mood")
-    top_temp = max(temp_counts, key=temp_counts.get)
-    top_mood = max(mood_counts, key=mood_counts.get)
-    avg_b = sum(r["brightness"] for r in results) / len(results)
-    avg_s = sum(r["saturation"] for r in results) / len(results)
-    
-    st.markdown(f"""
-        <div class="summary-box">
-            <h4 style="margin-top:0;">📝 สรุปผลวิเคราะห์โทนสี</h4>
-            <p>• โทนอุณหภูมิที่พบมากที่สุด : <b>{top_temp}</b> ({temp_counts[top_temp]} จาก {len(results)} รูป)</p>
-            <p>• อารมณ์ภาพที่พบมากที่สุด : <b>{top_mood}</b> ({mood_counts[top_mood]} จาก {len(results)} รูป)</p>
-            <p>• ความสว่างเฉลี่ย <b>{avg_b:.0f}/100</b> | ความอิ่มสีเฉลี่ย <b>{avg_s:.0f}/100</b></p>
-        </div>
-    """, unsafe_allow_html=True)
-else:
-    st.info("👆 กรุณาอัปโหลดรูปภาพด้านบนเพื่อเริ่มการวิเคราะห์")
+        mood
