@@ -12,6 +12,7 @@ Original file is located at
 import io
 import numpy as np
 import pandas as pd
+import streamlit as st
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 from PIL import Image
@@ -263,7 +264,7 @@ def show_summary(results):
     ax_sig.set_title("Signature palette (all photos combined)")
 
     fig.tight_layout()
-    plt.show()
+    st.pyplot(fig)
 
 
 def print_insight(results):
