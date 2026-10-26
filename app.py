@@ -20,14 +20,21 @@ import streamlit as st
 # ตั้งค่าหน้าเว็บ
 st.set_page_config(page_title="Photo Tone Dashboard", layout="wide")
 
-# --- ปรับแต่ง UI พื้นหลังสีครีมมินิมอล (Minimal Cream Theme) ---
+# --- ปรับแต่ง UI: ฟอนต์ Google Font 'Sarabun' และโทนสีครีมมินิมอล ---
 st.markdown("""
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap');
+    
+    * {
+        font-family: 'Sarabun', sans-serif !important;
+    }
+    
     /* สีพื้นหลังหลักของแอป */
     .stApp {
         background-color: #FDFBF7;
         color: #4A403A;
     }
+    
     /* ปรับแต่งส่วนอัปโหลดไฟล์ */
     .stFileUploader {
         background-color: #F7F3EC;
@@ -35,18 +42,31 @@ st.markdown("""
         border-radius: 12px;
         padding: 15px;
     }
+    
     /* หัวข้อและข้อความ */
     h1, h2, h3, h4 {
         color: #3D342F !important;
-        font-family: 'Helvetica Neue', sans-serif;
+        font-weight: 700 !important;
     }
+    
     /* กล่องข้อความสรุปด้านล่าง */
     .summary-box {
         background-color: #F5EFEB;
         border-left: 4px solid #C8B2A0;
-        padding: 15px 20px;
-        border-radius: 8px;
-        margin-top: 20px;
+        padding: 18px 22px;
+        border-radius: 10px;
+        margin-top: 25px;
+        font-size: 16px;
+    }
+    
+    /* ตกแต่งการ์ดแสดงรูปภาพ */
+    .img-card {
+        background-color: #FFFFFF;
+        border: 1px solid #EFEAE4;
+        border-radius: 10px;
+        padding: 8px;
+        text-align: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.03);
     }
     </style>
 """, unsafe_allow_html=True)
@@ -156,7 +176,7 @@ def count_labels(results, key):
 
 # --- ส่วนการแสดงผลบน STREAMLIT ---
 st.title("📸 Photo Tone Trends & AI Analytics Dashboard")
-st.caption("วิเคราะห์แนวโน้มโทนสี อารมณ์ และอุณหภูมิภาพถ่ายในสไตล์ มินิมอล")
+st.caption("วิเคราะห์แนวโน้มโทนสี อารมณ์ และอุณหภูมิภาพถ่ายในสไตล์มินิมอล")
 
 # ส่วนอัปโหลดรูปภาพ
 uploaded_files = st.file_uploader("เลือกรูปภาพเพื่อนำมาวิเคราะห์ (สามารถเลือกพร้อมกันหลายรูปได้)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
@@ -171,12 +191,20 @@ if uploaded_files:
         res = analyze_photo(file.name, img, idx)
         results.append(res)
         
+    # 🖼️ ส่วนแสดงรูปภาพที่ส่งไป (Uploaded Photos Gallery)
+    st.write("### 🖼️ รูปภาพที่นำเข้าวิเคราะห์")
+    cols = st.columns(min(len(photos), 6))  # แสดงสูงสุด 6 คอลัมน์ต่อแถว
+    for idx, (p_name, p_img) in enumerate(photos.items()):
+        with cols[idx % 6]:
+            st.image(p_img, use_column_width=True, caption=p_name)
+    st.divider()
+
     # 1. แสดงตารางสรุป
     st.write("### 📋 ตารางข้อมูลสถิติภาพถ่าย")
     table = pd.DataFrame([{k: v for k, v in r.items() if k != "palette"} for r in results])
     st.dataframe(table, use_container_width=True)
     
-    # 2. กราฟแดชบอร์ด 4 ช่อง สไตล์ครีมมินิมอล
+    # 2. กราฟแดชบอร์ด 4 ช่อง
     plt.rcParams['figure.facecolor'] = '#FDFBF7'
     plt.rcParams['axes.facecolor'] = '#FDFBF7'
     fig = plt.figure(figsize=(12, 10))
@@ -184,7 +212,7 @@ if uploaded_files:
     # (1) Mood
     ax1 = fig.add_subplot(2, 2, 1)
     moods = count_labels(results, "mood")
-    ax1.bar(list(moods.keys()), list(moods.values()), color="#8A9A86") # สีเขียวเซจมินิมอล
+    ax1.bar(list(moods.keys()), list(moods.values()), color="#8A9A86")
     ax1.set_title("Mood of photos", color="#3D342F", fontsize=11, fontweight='bold')
     ax1.set_ylabel("Number of photos", color="#3D342F")
     ax1.yaxis.set_major_locator(MaxNLocator(integer=True))
