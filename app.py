@@ -244,10 +244,16 @@ with main_col:
         
         # (3) Scatter Brightness vs Saturation
         ax3 = fig.add_subplot(2, 2, 3)
-        for r in results:
+        for idx_r, r in enumerate(results):
             num = int(r["photo"].replace("Photo ", ""))
-            ax3.scatter(r["brightness"], r["saturation"], s=55, color="#C8963E", zorder=3)
-            ax3.annotate(str(num), (r["brightness"], r["saturation"]),
+            # เพิ่มขยับพิกัดเล็กน้อยกรณีค่าเท่ากัน เพื่อไม่ให้จุดทับกัน
+            offset_x = (idx_r % 2 - 0.5) * 1.5
+            offset_y = (idx_r % 2 - 0.5) * 1.5
+            x_pos = r["brightness"] + offset_x
+            y_pos = r["saturation"] + offset_y
+            
+            ax3.scatter(x_pos, y_pos, s=55, color="#C8963E", alpha=0.85, zorder=3)
+            ax3.annotate(str(num), (x_pos, y_pos),
                          ha="center", va="center", fontsize=5.5, color="white", fontweight="bold")
         ax3.set_xlim(0, 100)
         ax3.set_ylim(0, 100)
