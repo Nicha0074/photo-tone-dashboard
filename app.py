@@ -17,26 +17,53 @@ from matplotlib.ticker import MaxNLocator
 from PIL import Image
 import streamlit as st
 
-# ตั้งค่าหน้าเว็บ Streamlit
-st.set_page_config(
-    page_title="Photo Tone Trends & AI Analytics",
-    page_icon="📸",
-    layout="wide"
-)
+# ตั้งค่าหน้าเว็บ
+st.set_page_config(page_title="Photo Tone Dashboard", layout="wide")
 
-# ค่าคงที่
+# --- ปรับแต่ง UI พื้นหลังสีครีมมินิมอล (Minimal Cream Theme) ---
+st.markdown("""
+    <style>
+    /* สีพื้นหลังหลักของแอป */
+    .stApp {
+        background-color: #FDFBF7;
+        color: #4A403A;
+    }
+    /* ปรับแต่งส่วนอัปโหลดไฟล์ */
+    .stFileUploader {
+        background-color: #F7F3EC;
+        border: 1px dashed #D4C5B9;
+        border-radius: 12px;
+        padding: 15px;
+    }
+    /* หัวข้อและข้อความ */
+    h1, h2, h3, h4 {
+        color: #3D342F !important;
+        font-family: 'Helvetica Neue', sans-serif;
+    }
+    /* กล่องข้อความสรุปด้านล่าง */
+    .summary-box {
+        background-color: #F5EFEB;
+        border-left: 4px solid #C8B2A0;
+        padding: 15px 20px;
+        border-radius: 8px;
+        margin-top: 20px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 MAX_SIZE = 300
 NUM_COLORS = 5
+SIGNATURE_COLORS = 6
+TEMP_COLORS = {"Warm": "#E89F67", "Cool": "#7A9E9F", "Neutral": "#B8B0A6"}
 
-def load_photo(file_bytes):
-    img = Image.open(io.BytesIO(file_bytes)).convert("RGB")
+def load_photo_from_bytes(data):
+    img = Image.open(io.BytesIO(data)).convert("RGB")
     img.thumbnail((MAX_SIZE, MAX_SIZE))
     return img
 
-def analyze_photo(file_name, img, number):
+def analyze_photo(name, img, number):
     arr = np.array(img, dtype=np.float32)
     r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
-    
     brightness = float(np.mean(0.299 * r + 0.587 * g + 0.114 * b))
     
     max_c = np.maximum(np.maximum(r, g), b)
@@ -44,7 +71,6 @@ def analyze_photo(file_name, img, number):
     delta = max_c - min_c
     sat = np.where(max_c == 0, 0, delta / (max_c + 1e-5)) * 100
     saturation = float(np.mean(sat))
-    
     warmth = float(np.mean(r - b))
     
     if warmth > 15:
@@ -66,9 +92,8 @@ def analyze_photo(file_name, img, number):
     pixels = arr.reshape(-1, 3)
     idx = np.random.choice(len(pixels), min(1000, len(pixels)), replace=False)
     sample = pixels[idx]
-    
-    counts, bins = np.histogramdd(sample, bins=(4, 4, 4), range=((0, 256), (0, 256), (0, 256)))
-    flat_idx = np.argsort(counts.toarray().ravel())[::-1][:NUM_COLORS]
+    counts, _ = np.histogramdd(sample, bins=(4, 4, 4), range=((0, 256), (0, 256), (0, 256)))
+    flat_idx = np.argsort(counts.ravel())[::-1][:NUM_COLORS]
     
     palette = []
     for fi in flat_idx:
@@ -78,7 +103,7 @@ def analyze_photo(file_name, img, number):
         
     return {
         "photo": f"Photo {number}",
-        "file": file_name,
+        "file": name,
         "brightness": round(brightness, 1),
         "saturation": round(saturation, 1),
         "warmth": round(warmth, 1),
@@ -87,74 +112,130 @@ def analyze_photo(file_name, img, number):
         "palette": palette
     }
 
-# --- ส่วน UI หน้าเว็บ ---
+def text_color_for(rgb):
+    light = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]
+    return "black" if light > 140 else "white"
+
+def draw_palette_bar(ax, palette, show_hex=False):
+    left = 0
+    for rgb, share in palette:
+        ax.barh(0, share, left=left, color=[c / 255 for c in rgb])
+        if show_hex:
+            hex_code = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+            ax.text(left + share / 2, 0, hex_code, ha="center", va="center",
+                    fontsize=8, color=text_color_for(rgb))
+        left += share
+    ax.set_xlim(0, 1)
+    ax.set_yticks([])
+    ax.set_xticks([])
+
+def signature_palette(results, k=SIGNATURE_COLORS):
+    all_colors = []
+    for r in results:
+        all_colors.extend(r["palette"])
+    if not all_colors:
+        return []
+    sample = np.array(all_colors)
+    counts, _ = np.histogramdd(sample, bins=(8, 8, 8), range=((0, 256), (0, 256), (0, 256)))
+    flat_idx = np.argsort(counts.ravel())[::-1][:k]
+    sig = []
+    total = sum(counts.ravel()[fi] for fi in flat_idx) or 1
+    for fi in flat_idx:
+        indices = np.unravel_index(fi, (8, 8, 8))
+        center = [(indices[i] + 0.5) * 32 for i in range(3)]
+        share = counts[indices] / total
+        sig.append((tuple(int(c) for c in center), share))
+    return sig
+
+def count_labels(results, key):
+    out = {}
+    for r in results:
+        val = r[key]
+        out[val] = out.get(val, 0) + 1
+    return out
+
+# --- ส่วนการแสดงผลบน STREAMLIT ---
 st.title("📸 Photo Tone Trends & AI Analytics Dashboard")
-st.markdown("วิเคราะห์โทนสี อารมณ์ และอุณหภูมิแสงของภาพถ่ายด้วย AI")
-st.divider()
+st.caption("วิเคราะห์แนวโน้มโทนสี อารมณ์ และอุณหภูมิภาพถ่ายในสไตล์ มินิมอล")
 
-# แถบด้านข้างสำหรับอัปโหลดรูป
-st.sidebar.header("📥 อัปโหลดรูปภาพ")
-uploaded_files = st.sidebar.file_uploader(
-    "เลือกรูปภาพเพื่อนำมาวิเคราะห์ (รองรับหลายรูป)", 
-    type=["jpg", "jpeg", "png"], 
-    accept_multiple_files=True
-)
-
-results = []
-photos_dict = {}
+# ส่วนอัปโหลดรูปภาพ
+uploaded_files = st.file_uploader("เลือกรูปภาพเพื่อนำมาวิเคราะห์ (สามารถเลือกพร้อมกันหลายรูปได้)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
 if uploaded_files:
-    for idx, uploaded_file in enumerate(uploaded_files, start=1):
-        file_bytes = uploaded_file.read()
-        img = load_photo(file_bytes)
-        photos_dict[f"Photo {idx}"] = img
-        res = analyze_photo(uploaded_file.name, img, idx)
+    results = []
+    photos = {}
+    for idx, file in enumerate(uploaded_files, start=1):
+        bytes_data = file.read()
+        img = load_photo_from_bytes(bytes_data)
+        photos[f"Photo {idx}"] = img
+        res = analyze_photo(file.name, img, idx)
         results.append(res)
+        
+    # 1. แสดงตารางสรุป
+    st.write("### 📋 ตารางข้อมูลสถิติภาพถ่าย")
+    table = pd.DataFrame([{k: v for k, v in r.items() if k != "palette"} for r in results])
+    st.dataframe(table, use_container_width=True)
+    
+    # 2. กราฟแดชบอร์ด 4 ช่อง สไตล์ครีมมินิมอล
+    plt.rcParams['figure.facecolor'] = '#FDFBF7'
+    plt.rcParams['axes.facecolor'] = '#FDFBF7'
+    fig = plt.figure(figsize=(12, 10))
+    
+    # (1) Mood
+    ax1 = fig.add_subplot(2, 2, 1)
+    moods = count_labels(results, "mood")
+    ax1.bar(list(moods.keys()), list(moods.values()), color="#8A9A86") # สีเขียวเซจมินิมอล
+    ax1.set_title("Mood of photos", color="#3D342F", fontsize=11, fontweight='bold')
+    ax1.set_ylabel("Number of photos", color="#3D342F")
+    ax1.yaxis.set_major_locator(MaxNLocator(integer=True))
+    plt.setp(ax1.get_xticklabels(), rotation=20, ha="right", color="#3D342F")
+    
+    # (2) Temperature
+    ax2 = fig.add_subplot(2, 2, 2)
+    temps = count_labels(results, "temperature")
+    colors = [TEMP_COLORS.get(t, "#B8B0A6") for t in temps.keys()]
+    ax2.bar(list(temps.keys()), list(temps.values()), color=colors)
+    ax2.set_title("Color temperature", color="#3D342F", fontsize=11, fontweight='bold')
+    ax2.set_ylabel("Number of photos", color="#3D342F")
+    ax2.yaxis.set_major_locator(MaxNLocator(integer=True))
+    
+    # (3) Scatter Brightness vs Saturation
+    ax3 = fig.add_subplot(2, 2, 3)
+    for r in results:
+        num = int(r["photo"].replace("Photo ", ""))
+        ax3.scatter(r["brightness"], r["saturation"], s=130, color="#C8963E", zorder=3)
+        ax3.annotate(str(num), (r["brightness"], r["saturation"]),
+                     ha="center", va="center", fontsize=8, color="white", fontweight="bold")
+    ax3.set_xlim(0, 100)
+    ax3.set_ylim(0, 100)
+    ax3.set_xlabel("Brightness", color="#3D342F")
+    ax3.set_ylabel("Saturation", color="#3D342F")
+    ax3.set_title("Brightness vs saturation (number = photo)", color="#3D342F", fontsize=11, fontweight='bold')
+    ax3.grid(True, linestyle="--", alpha=0.4, color="#D4C5B9")
+    
+    # (4) Signature Palette
+    ax_sig = fig.add_subplot(2, 2, 4)
+    draw_palette_bar(ax_sig, signature_palette(results), show_hex=True)
+    ax_sig.set_title("Signature palette (all photos combined)", color="#3D342F", fontsize=11, fontweight='bold')
+    
+    fig.tight_layout()
+    st.pyplot(fig)
+    
+    # 3. สรุปผลข้อความภาษาไทยด้านล่าง
+    temp_counts = count_labels(results, "temperature")
+    mood_counts = count_labels(results, "mood")
+    top_temp = max(temp_counts, key=temp_counts.get)
+    top_mood = max(mood_counts, key=mood_counts.get)
+    avg_b = sum(r["brightness"] for r in results) / len(results)
+    avg_s = sum(r["saturation"] for r in results) / len(results)
+    
+    st.markdown(f"""
+        <div class="summary-box">
+            <h4 style="margin-top:0;">📝 สรุปผลวิเคราะห์โทนสี</h4>
+            <p>• โทนอุณหภูมิที่พบมากที่สุด : <b>{top_temp}</b> ({temp_counts[top_temp]} จาก {len(results)} รูป)</p>
+            <p>• อารมณ์ภาพที่พบมากที่สุด : <b>{top_mood}</b> ({mood_counts[top_mood]} จาก {len(results)} รูป)</p>
+            <p>• ความสว่างเฉลี่ย <b>{avg_b:.0f}/100</b> | ความอิ่มสีเฉลี่ย <b>{avg_s:.0f}/100</b></p>
+        </div>
+    """, unsafe_allow_html=True)
 else:
-    st.info("💡 กรุณาอัปโหลดรูปภาพที่แถบเมนูด้านซ้ายเพื่อเริ่มการวิเคราะห์")
-
-# แสดงผลเมื่อมีข้อมูล
-if results:
-    df = pd.DataFrame([{k: v for k, v in r.items() if k != "palette"} for r in results])
-    
-    # สรุปภาพรวม (Metrics)
-    st.subheader("📊 สรุปผลการวิเคราะห์ภาพรวม")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("จำนวนรูปทั้งหมด", f"{len(results)} รูป")
-    col2.metric("ความสว่างเฉลี่ย", f"{df['brightness'].mean():.1f} / 100")
-    col3.metric("ความอิ่มสีเฉลี่ย", f"{df['saturation'].mean():.1f} / 100")
-    col4.metric("โทนสีหลัก", df['temperature'].mode()[0] if not df['temperature'].empty else "-")
-    
-    st.divider()
-    
-    # แสดงตารางและรูปภาพ
-    col_left, col_right = st.columns([3, 2])
-    with col_left:
-        st.subheader("📋 ตารางข้อมูลสถิติภาพถ่าย")
-        st.dataframe(df, use_container_width=True)
-        
-    with col_right:
-        st.subheader("🖼️ รูปภาพที่อัปโหลด")
-        selected_photo = st.selectbox("เลือกรูปเพื่อดูตัวอย่าง", list(photos_dict.keys()))
-        if selected_photo:
-            st.image(photos_dict[selected_photo], caption=selected_photo, use_column_width=True)
-            
-    st.divider()
-    
-    # แสดงกราฟวิเคราะห์
-    st.subheader("📈 กราฟแสดงแนวโน้มโทนสี (Analytics Graphs)")
-    g_col1, g_col2 = st.columns(2)
-    
-    with g_col1:
-        fig1, ax1 = plt.subplots(figsize=(6, 4))
-        df['mood'].value_counts().plot(kind='bar', ax=ax1, color='#5b8bdef0')
-        ax1.set_title("Distribution of Photo Moods")
-        ax1.set_ylabel("Number of Photos")
-        st.pyplot(fig1)
-        
-    with g_col2:
-        fig2, ax2 = plt.subplots(figsize=(6, 4))
-        df['temperature'].value_counts().plot(kind='bar', ax=ax2, color='#f4a259')
-        ax2.set_title("Color Temperature Distribution")
-        ax2.set_ylabel("Number of Photos")
-        st.pyplot(fig2)
+    st.info("👆 กรุณาอัปโหลดรูปภาพด้านบนเพื่อเริ่มการวิเคราะห์")
