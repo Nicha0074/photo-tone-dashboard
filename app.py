@@ -284,10 +284,5 @@ def print_insight(results):
 show_per_photo(results, photos)
 show_summary(results)
 print_insight(results)
-streamlit
-pandas
-pillow
-plotly
-matplotlib
-scikit-learn
+
 
