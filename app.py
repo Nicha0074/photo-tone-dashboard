@@ -150,7 +150,7 @@ def draw_palette_bar(ax, palette, show_hex=False):
         if show_hex:
             hex_code = f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
             ax.text(left + share / 2, 0, hex_code, ha="center", va="center",
-                    fontsize=7, color=text_color_for(rgb))
+            fontsize=5.5, color=text_color_for(rgb), rotation=90)
         left += share
     ax.set_xlim(0, 1)
     ax.set_yticks([])
@@ -182,7 +182,7 @@ def count_labels(results, key):
     return out
 
 # --- บีบส่วนแสดงผลให้อยู่ตรงกลางขนาดเล็กลงพอดี ---
-left_pad, main_col, right_pad = st.columns([1, 2.5, 1])
+left_pad, main_col, right_pad = st.columns([1.5, 3.0, 1.5])
 
 with main_col:
     st.title("📸 Photo Tone Trends & AI Analytics Dashboard")
