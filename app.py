@@ -186,7 +186,7 @@ left_pad, main_col, right_pad = st.columns([1.5, 3.0, 1.5])
 
 with main_col:
     st.title("📸 Photo Tone Trends & AI Analytics Dashboard")
-    st.caption("วิเคราะห์แนวโน้มโทนสี อารมณ์ และอุณหภูมิภาพถ่ายในสไตล์มินิมอล")
+    st.caption("วิเคราะห์แนวโน้มโทนสี อารมณ์ และอุณหภูมิภาพของรูปภาพ")
 
     # ส่วนอัปโหลดรูปภาพ
     uploaded_files = st.file_uploader("เลือกรูปภาพเพื่อนำมาวิเคราะห์ (สามารถเลือกพร้อมกันหลายรูปได้)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
