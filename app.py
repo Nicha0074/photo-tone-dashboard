@@ -82,7 +82,8 @@ def load_photo_from_bytes(data):
 def analyze_photo(name, img, number):
     arr = np.array(img, dtype=np.float32)
     r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
-    brightness = float(np.mean(0.299 * r + 0.587 * g + 0.114 * b))
+    # แปลงช่วง 0-255 ให้เป็นเปอร์เซ็นต์ 0-100
+    brightness = float(np.mean(0.299 * r + 0.587 * g + 0.114 * b)) / 255.0 * 100.0
     
     max_c = np.maximum(np.maximum(r, g), b)
     min_c = np.minimum(np.minimum(r, g), b)
@@ -98,11 +99,11 @@ def analyze_photo(name, img, number):
     else:
         temperature = "Neutral"
         
-    if brightness > 70 and saturation < 30:
+    if brightness > 65 and saturation < 40:
         mood = "Pastel / Airy"
     elif brightness < 35:
         mood = "Dark & Moody"
-    elif saturation > 55:
+    elif saturation > 50:
         mood = "Vivid"
     else:
         mood = "Muted"
